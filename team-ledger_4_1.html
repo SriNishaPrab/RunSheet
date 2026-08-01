@@ -1,0 +1,1421 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Team Ledger — Resourcing &amp; Margin Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --ink:#1B2430;
+    --ink-soft:#5B6570;
+    --paper:#EEF1EC;
+    --card:#FBFBF9;
+    --line:#D7D9D2;
+    --line-strong:#B9BDB2;
+    --teal:#276E6E;
+    --teal-dark:#1A4F4F;
+    --gold:#B8923B;
+    --brick:#A64B3A;
+    --good:#2E6E4E;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1500px;margin:0 auto;padding:28px 32px 64px;}
+
+  /* ===== Masthead ===== */
+  .masthead{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    flex-wrap:wrap;gap:20px;
+    padding-bottom:18px;margin-bottom:28px;
+    border-bottom:2px solid var(--ink);
+  }
+  .brand{display:flex;align-items:center;gap:14px;cursor:pointer;}
+  .brand-mark{
+    width:44px;height:44px;border-radius:3px;
+    background:var(--ink);color:var(--paper);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Fraunces',serif;font-size:22px;font-weight:600;
+    flex-shrink:0;
+  }
+  .brand h1{
+    font-family:'Fraunces',serif;font-weight:600;font-size:26px;
+    margin:0;letter-spacing:-0.01em;
+  }
+  .brand p{margin:2px 0 0;color:var(--ink-soft);font-size:13px;}
+
+  .steps{list-style:none;display:flex;gap:0;margin:0;padding:0;}
+  .steps li{
+    font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.03em;
+    color:var(--ink-soft);padding:7px 14px;border:1px solid var(--line);
+    border-right:none;background:var(--card);white-space:nowrap;
+  }
+  .steps li:last-child{border-right:1px solid var(--line);}
+  .steps li.active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+  .steps li.done{background:#E3E7DE;color:var(--ink);}
+
+  /* ===== Screens ===== */
+  .screen{display:none;}
+  .screen.active{display:block;animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:4px;
+    padding:36px 40px;max-width:640px;
+  }
+  .card h2{font-family:'Fraunces',serif;font-weight:600;font-size:22px;margin:0 0 8px;}
+  .card > p{color:var(--ink-soft);font-size:14.5px;line-height:1.55;margin:0 0 26px;}
+
+  label{display:block;font-size:13px;font-weight:500;color:var(--ink);margin-bottom:6px;}
+  input,select{
+    width:100%;padding:10px 12px;border:1px solid var(--line-strong);border-radius:3px;
+    font-family:'IBM Plex Mono',monospace;font-size:14px;background:#fff;color:var(--ink);
+  }
+  input:focus,select:focus{outline:2px solid var(--teal);outline-offset:1px;border-color:var(--teal);}
+
+  button{
+    font-family:'IBM Plex Sans',sans-serif;font-weight:500;font-size:13.5px;
+    padding:10px 18px;border-radius:3px;border:1px solid var(--ink);
+    background:var(--ink);color:var(--paper);cursor:pointer;
+  }
+  button:hover{background:var(--teal-dark);border-color:var(--teal-dark);}
+  button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line-strong);}
+  button.ghost:hover{background:#fff;border-color:var(--ink);color:var(--ink);}
+  button.danger{color:var(--brick);border-color:var(--brick);}
+  button.danger:hover{background:var(--brick);color:#fff;}
+
+  #form-size label{margin-top:16px;}
+  #form-size label:first-of-type{margin-top:0;}
+  #form-size button{margin-top:20px;width:100%;}
+
+  /* ===== Ledger list screen ===== */
+  #ledger-list{margin-top:4px;}
+  .ledger-picker-row{display:flex;gap:10px;align-items:stretch;}
+  #ledger-select{flex:1;cursor:pointer;}
+  .ledger-picker-actions{
+    display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--line);
+    align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  }
+  .ledger-picker-actions.show{display:flex;}
+  .lp-meta{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);}
+  .lp-meta .lp-name{font-family:'Fraunces',serif;font-weight:600;font-size:16.5px;color:var(--ink);display:block;margin-bottom:3px;}
+  .lp-actions{display:flex;gap:8px;flex-shrink:0;}
+  .lp-actions button{font-size:12.5px;padding:9px 16px;}
+  .empty-note{color:var(--ink-soft);font-size:14px;font-style:italic;margin:0 0 8px;}
+
+  /* ===== Member table (screen 1) ===== */
+  .member-table-scroll{
+    overflow-x:auto;border:1px solid var(--ink);border-radius:4px;background:var(--card);
+  }
+  #member-table{border-collapse:collapse;width:100%;min-width:860px;}
+  #member-table thead th{
+    position:sticky;top:0;background:var(--ink);color:var(--paper);
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.03em;
+    text-transform:uppercase;font-weight:500;text-align:left;padding:10px 10px;
+    border-right:1px solid #2E3A48;white-space:nowrap;
+  }
+  #member-table tbody td{
+    border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+    padding:0;background:#fff;
+  }
+  #member-table tbody tr:nth-child(even) td{background:#F7F7F4;}
+  #member-table tbody td input,#member-table tbody td select{
+    border:none;border-radius:0;background:transparent;width:100%;
+    padding:9px 10px;font-size:13px;min-width:110px;
+  }
+  #member-table tbody td input:focus,#member-table tbody td select:focus{
+    outline:2px solid var(--teal);outline-offset:-2px;background:#fff;
+  }
+  #member-table td.rm{text-align:center;background:#fff;min-width:auto;}
+  #member-table td.rm button{
+    background:none;border:1px solid var(--line-strong);color:var(--brick);
+    width:26px;height:26px;padding:0;line-height:1;border-radius:3px;font-size:14px;
+  }
+  #member-table td.rm button:hover{background:var(--brick);color:#fff;border-color:var(--brick);}
+  #member-table td.duration-cell{background:#FBFAF6;}
+  #member-table td.duration-cell .duration-months{
+    font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--teal-dark);font-weight:600;
+  }
+  #member-table td.duration-cell .duration-range{font-size:10.5px;color:var(--ink-soft);margin-top:1px;}
+  #member-table input[name="roleOther"]{border-top:1px dashed var(--line-strong)!important;}
+  .member-idx{padding:9px 10px;font-family:'IBM Plex Mono',monospace;color:var(--ink-soft);font-size:12px;}
+  .member-table-actions{display:flex;justify-content:space-between;align-items:center;margin-top:14px;}
+  .form-actions{display:flex;justify-content:space-between;gap:12px;margin-top:28px;}
+
+  /* ===== Ledger screen (screen 2) ===== */
+  #screen-2.screen.active{max-width:none;}
+  .ledger-toolbar{
+    display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;
+    gap:16px;margin-bottom:16px;
+  }
+  .ledger-title-row{display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap;}
+  .ledger-name-input{
+    font-family:'Fraunces',serif;font-weight:600;font-size:22px;border:none;background:transparent;
+    padding:2px 4px;color:var(--ink);min-width:220px;width:auto;
+  }
+  .ledger-name-input:focus{outline:2px solid var(--teal);outline-offset:1px;border-radius:3px;background:#fff;}
+  .ledger-toolbar p{margin:0;color:var(--ink-soft);font-size:13.5px;}
+  .sync-badge{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;
+    color:var(--teal-dark);background:#E3EDEA;border:1px solid #BFD8D2;
+    border-radius:20px;padding:3px 10px;vertical-align:middle;white-space:nowrap;
+  }
+  .sync-badge.live{color:var(--good);background:#E4EFE7;border-color:#BFDBC7;}
+  .sync-badge.off{color:var(--ink-soft);background:#EDEDE8;border-color:var(--line);}
+  .toolbar-actions{display:flex;gap:8px;flex-wrap:wrap;}
+  .toolbar-actions button{font-size:12.5px;padding:9px 14px;}
+
+  .table-scroll{overflow-x:auto;border:1px solid var(--ink);border-radius:4px;background:var(--card);}
+  table{border-collapse:collapse;width:100%;min-width:1400px;}
+  thead th{
+    position:sticky;top:0;background:var(--ink);color:var(--paper);
+    font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.03em;
+    text-transform:uppercase;font-weight:500;text-align:left;padding:8px 8px;
+    border-right:1px solid #2E3A48;white-space:nowrap;z-index:2;
+  }
+  thead th.group-cost{background:var(--brick);}
+  thead th.group-rev{background:var(--teal-dark);}
+  thead th.group-margin{background:#3C3116;}
+  tbody td{
+    border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+    padding:0;background:#fff;
+  }
+  tbody tr:nth-child(even) td{background:#F7F7F4;}
+  tbody tr:hover td{background:#E9F1EC;}
+  tbody tr:hover td.inactive-month{background:none;}
+  tbody td input,tbody td select{
+    border:none;border-radius:0;background:transparent;width:100%;
+    padding:7px 8px;font-size:12.5px;min-width:76px;
+  }
+  tbody td input:focus,tbody td select:focus{outline:2px solid var(--teal);outline-offset:-2px;background:#fff;}
+  tbody td.computed input{color:#3E4750;background:#FBFAF6;font-weight:500;}
+  tbody td.computed input:focus{color:var(--ink);}
+  tbody td input[data-f="roleOther"]{border-top:1px dashed var(--line-strong)!important;}
+  td.rm{text-align:center;background:#fff;}
+  td.rm button{
+    background:none;border:1px solid var(--line-strong);color:var(--brick);
+    width:24px;height:24px;padding:0;line-height:1;border-radius:3px;font-size:13px;
+  }
+  td.rm button:hover{background:var(--brick);color:#fff;border-color:var(--brick);}
+
+  .totals-row-top td{
+    padding:9px 8px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;
+    border-bottom:3px double var(--ink);background:#EAE7DC;white-space:nowrap;
+  }
+  .totals-row-top td.tf-label{text-align:right;color:var(--ink-soft);font-weight:500;font-style:italic;}
+  .totals-row-top td.tf-margin{color:var(--good);}
+
+  th.month-col-label{font-size:9.5px;min-width:56px;}
+  td.month-cell{min-width:56px;}
+  td.month-cell.computed input{text-align:center;}
+  td.inactive-month{
+    background:repeating-linear-gradient(135deg,#E2E2DC,#E2E2DC 6px,#D8D8D1 6px,#D8D8D1 12px)!important;
+    text-align:center;vertical-align:middle;
+  }
+  td.inactive-month .inactive-label{color:#9A9C93;font-family:'IBM Plex Mono',monospace;font-size:11.5px;padding:7px 0;}
+  td.duration-display{background:#FBFAF6;}
+  td.duration-display .duration-months{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--teal-dark);font-weight:600;
+    padding:7px 8px;white-space:nowrap;
+  }
+
+  /* ===== Frozen columns: # through Duration stay put; everything from the
+     Revenue Hours section onward scrolls independently within .table-scroll ===== */
+  .fz1,.fz2,.fz3,.fz4,.fz5,.fz6,.fz7,.fz8,.fz9,.fz-label-span{ position:sticky; }
+  .fz1{ width:34px; min-width:34px; max-width:34px; left:0; }
+  .fz2{ width:92px; min-width:92px; max-width:92px; left:34px; }
+  .fz3{ width:124px; min-width:124px; max-width:124px; left:126px; }
+  .fz4{ width:74px; min-width:74px; max-width:74px; left:250px; }
+  .fz5{ width:72px; min-width:72px; max-width:72px; left:324px; }
+  .fz6{ width:72px; min-width:72px; max-width:72px; left:396px; }
+  .fz7{ width:100px; min-width:100px; max-width:100px; left:468px; }
+  .fz8{ width:100px; min-width:100px; max-width:100px; left:568px; }
+  .fz9{ width:62px; min-width:62px; max-width:62px; left:668px; }
+  .fz-label-span{ width:696px; min-width:696px; max-width:696px; left:34px; }
+  thead .fz1,thead .fz2,thead .fz3,thead .fz4,thead .fz5,thead .fz6,thead .fz7,thead .fz8,thead .fz9{ z-index:5; }
+  tbody .fz1,tbody .fz2,tbody .fz3,tbody .fz4,tbody .fz5,tbody .fz6,tbody .fz7,tbody .fz8,tbody .fz9{ z-index:2; }
+  .fz-label-span{ z-index:4; }
+  .fz9,thead th.fz9{ box-shadow:3px 0 6px -3px rgba(0,0,0,0.35); }
+  .fz-label-span{ box-shadow:3px 0 6px -3px rgba(0,0,0,0.2); }
+
+  .hint-row{margin-top:10px;color:var(--ink-soft);font-size:12px;font-family:'IBM Plex Mono',monospace;}
+
+  /* ===== Filters panel ===== */
+  #toggle-filters{position:relative;}
+  .filter-badge{
+    display:none;align-items:center;justify-content:center;
+    min-width:16px;height:16px;padding:0 4px;margin-left:6px;
+    background:var(--gold);color:#fff;border-radius:20px;
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;
+  }
+  .filters-panel{
+    display:none;background:var(--card);border:1px solid var(--ink);border-radius:4px;
+    padding:18px 20px 16px;margin-bottom:16px;
+  }
+  .filters-panel.show{display:block;}
+  .filters-grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+    gap:14px 16px;
+  }
+  .filter-field label{
+    display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.03em;
+    text-transform:uppercase;color:var(--ink-soft);margin-bottom:5px;
+  }
+  .filter-field input,.filter-field select{
+    width:100%;padding:7px 9px;border:1px solid var(--line-strong);border-radius:3px;
+    font-family:'IBM Plex Mono',monospace;font-size:12.5px;background:#fff;color:var(--ink);
+  }
+  .filter-field input:focus,.filter-field select:focus{outline:2px solid var(--teal);outline-offset:1px;border-color:var(--teal);}
+  .filter-range{display:flex;align-items:center;gap:5px;}
+  .filter-range input{width:100%;min-width:0;}
+  .filter-range span{color:var(--ink-soft);font-size:11px;flex-shrink:0;}
+  .filters-footer{
+    display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;
+    margin-top:16px;padding-top:14px;border-top:1px solid var(--line);
+  }
+  .filter-count{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);}
+  .filter-count strong{color:var(--ink);}
+  .filters-footer button{font-size:12.5px;padding:8px 14px;}
+
+  @media (max-width:720px){
+    .card{padding:26px 22px;}
+    .masthead{flex-direction:column;align-items:flex-start;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="brand" id="brand-home" title="All ledgers">
+      <span class="brand-mark">§</span>
+      <div>
+        <h1>Team Ledger</h1>
+        <p>Resourcing &amp; margin planner</p>
+      </div>
+    </div>
+    <ol class="steps" id="steps">
+      <li data-step="list" class="active">Ledgers</li>
+      <li data-step="0">Team size</li>
+      <li data-step="1">Member details</li>
+      <li data-step="2">Ledger</li>
+    </ol>
+  </header>
+
+  <main>
+    <!-- SCREEN: LEDGER LIST -->
+    <section id="screen-list" class="screen active">
+      <div class="card" style="max-width:760px;">
+        <h2>Your ledgers</h2>
+        <p>Create a ledger for each project, client, or engagement, and switch between them any time.</p>
+        <div id="ledger-list">
+          <div class="ledger-picker-row">
+            <select id="ledger-select">
+              <option value="" selected>Choose a ledger…</option>
+            </select>
+          </div>
+          <div class="ledger-picker-actions" id="ledger-picker-actions">
+            <div class="lp-meta" id="ledger-picker-meta"></div>
+            <div class="lp-actions">
+              <button type="button" class="ghost" id="open-selected-ledger">Open →</button>
+              <button type="button" class="ghost danger" id="delete-selected-ledger">Delete</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-actions" style="justify-content:flex-start;margin-top:20px;">
+          <button type="button" id="new-ledger-btn">+ New ledger</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 0 -->
+    <section id="screen-0" class="screen">
+      <div class="card">
+        <h2>Set up a new ledger</h2>
+        <p>Give it a name, then tell us how many people are on the team. You'll enter each person's details next.</p>
+        <form id="form-size">
+          <label for="ledger-name">Ledger name</label>
+          <input type="text" id="ledger-name" placeholder="e.g. Project Atlas — Acme Corp">
+          <label for="team-size">Number of team members</label>
+          <input type="number" id="team-size" min="1" max="60" value="3" required>
+          <button type="submit">Continue →</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- SCREEN 1 -->
+    <section id="screen-1" class="screen">
+      <div class="card" style="max-width:none;">
+        <h2>Tell us about each member</h2>
+        <p>Bill rate is what you charge the client; pay rate is what the member costs you. From/To sets how long they're on the project.</p>
+        <form id="form-members">
+          <div class="member-table-scroll">
+            <table id="member-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Name</th>
+                  <th>Role</th>
+                  <th>Bill Rate ($/hr)</th>
+                  <th>Pay Rate ($/hr)</th>
+                  <th>From</th>
+                  <th>To</th>
+                  <th>Duration</th>
+                  <th>Onsite / Offshore</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="member-table-body"></tbody>
+            </table>
+          </div>
+          <div class="member-table-actions">
+            <button type="button" class="ghost" id="add-member-row">+ Add member</button>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="ghost" id="back-to-0">← Back</button>
+            <button type="submit">Build ledger →</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- SCREEN 2 -->
+    <section id="screen-2" class="screen">
+      <div class="ledger-toolbar">
+        <div>
+          <div class="ledger-title-row">
+            <input type="text" id="ledger-name-input" class="ledger-name-input" placeholder="Untitled ledger">
+            <span id="sync-badge" class="sync-badge">—</span>
+          </div>
+          <p>Every cell is editable. Rates, monthly hours, or dates change and totals recalculate automatically.</p>
+        </div>
+        <div class="toolbar-actions">
+          <button class="ghost" id="all-ledgers-btn">☰ All ledgers</button>
+          <button class="ghost" id="toggle-filters">⚙ Filters<span class="filter-badge" id="filter-badge">0</span></button>
+          <button class="ghost" id="add-row">+ Add member</button>
+          <button class="ghost" id="export-xlsx">Export .xlsx</button>
+          <button class="ghost" id="export-csv">Export .csv</button>
+          <button class="ghost" id="back-to-1">← Edit details</button>
+        </div>
+      </div>
+
+      <div class="filters-panel" id="filters-panel">
+        <div class="filters-grid">
+          <div class="filter-field">
+            <label for="filter-name">Name</label>
+            <input type="text" id="filter-name" placeholder="Search name…">
+          </div>
+          <div class="filter-field">
+            <label for="filter-role">Role</label>
+            <select id="filter-role"><option value="">All roles</option></select>
+          </div>
+          <div class="filter-field">
+            <label for="filter-type">Onsite / Offshore</label>
+            <select id="filter-type">
+              <option value="">All types</option>
+              <option value="Onsite">Onsite</option>
+              <option value="Offshore">Offshore</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label>Bill Rate ($/hr)</label>
+            <div class="filter-range">
+              <input type="number" id="filter-bill-min" placeholder="Min">
+              <span>–</span>
+              <input type="number" id="filter-bill-max" placeholder="Max">
+            </div>
+          </div>
+          <div class="filter-field">
+            <label>Pay Rate ($/hr)</label>
+            <div class="filter-range">
+              <input type="number" id="filter-pay-min" placeholder="Min">
+              <span>–</span>
+              <input type="number" id="filter-pay-max" placeholder="Max">
+            </div>
+          </div>
+          <div class="filter-field">
+            <label for="filter-from">From (on/after)</label>
+            <input type="date" id="filter-from">
+          </div>
+          <div class="filter-field">
+            <label for="filter-to">To (on/before)</label>
+            <input type="date" id="filter-to">
+          </div>
+          <div class="filter-field">
+            <label>Duration (months)</label>
+            <div class="filter-range">
+              <input type="number" id="filter-dur-min" placeholder="Min">
+              <span>–</span>
+              <input type="number" id="filter-dur-max" placeholder="Max">
+            </div>
+          </div>
+          <div class="filter-field">
+            <label>Total Revenue Hrs</label>
+            <div class="filter-range">
+              <input type="number" id="filter-revhrs-min" placeholder="Min">
+              <span>–</span>
+              <input type="number" id="filter-revhrs-max" placeholder="Max">
+            </div>
+          </div>
+          <div class="filter-field">
+            <label>Total Cost Hrs</label>
+            <div class="filter-range">
+              <input type="number" id="filter-costhrs-min" placeholder="Min">
+              <span>–</span>
+              <input type="number" id="filter-costhrs-max" placeholder="Max">
+            </div>
+          </div>
+          <div class="filter-field">
+            <label>Total Cost ($)</label>
+            <div class="filter-range">
+              <input type="number" id="filter-cost-min" placeholder="Min">
+              <span>–</span>
+              <input type="number" id="filter-cost-max" placeholder="Max">
+            </div>
+          </div>
+          <div class="filter-field">
+            <label>Total Revenue ($)</label>
+            <div class="filter-range">
+              <input type="number" id="filter-revenue-min" placeholder="Min">
+              <span>–</span>
+              <input type="number" id="filter-revenue-max" placeholder="Max">
+            </div>
+          </div>
+          <div class="filter-field">
+            <label>Margin ($)</label>
+            <div class="filter-range">
+              <input type="number" id="filter-margin-min" placeholder="Min">
+              <span>–</span>
+              <input type="number" id="filter-margin-max" placeholder="Max">
+            </div>
+          </div>
+        </div>
+        <div class="filters-footer">
+          <div class="filter-count" id="filter-count">Showing all members</div>
+          <button type="button" class="ghost" id="clear-filters">Clear filters</button>
+        </div>
+      </div>
+
+      <div class="table-scroll">
+        <table id="ledger-table">
+          <thead id="ledger-thead"></thead>
+          <tbody id="ledger-body"></tbody>
+        </table>
+      </div>
+      <p class="hint-row">Month columns are generated automatically from each member's From/To dates. Grey cells mean that member isn't on the project that month — both Revenue Hrs and Cost Hrs default to 160/month but are editable per month.</p>
+      <p class="hint-row" id="sync-hint">Data is stored in Supabase and updates live for anyone with this page open — works from anywhere it's hosted, not just inside Claude. If the badge says "Local only", add your Supabase URL/key in the script (see comments near the top of the JS).</p>
+    </section>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var state = { ledgerId: null, ledgerName: "", members: [] };
+  var nextId = 1;
+  var ledgerIndex = [];
+  var localLedgerCache = {};
+  var lastSyncedJSON = "";
+  var lastSavedUpdatedAt = null;
+  var saveDebounceTimer = null;
+  var lastLoadError = null;
+
+  var ROLES = [
+    "Project Manager","Product Manager","Business Analyst","Solution Architect","Tech Lead",
+    "Backend Developer","Frontend Developer","Full Stack Developer","Mobile Developer",
+    "QA Engineer","DevOps Engineer","Data Engineer","Data Scientist","UI/UX Designer",
+    "Scrum Master","Support Engineer","Database Administrator","Security Engineer","Other"
+  ];
+
+  // ---------- helpers ----------
+  function num(v){ var n = parseFloat(v); return isNaN(n) ? 0 : n; }
+  function money(n){ return "$" + n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function esc(s){ var d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
+  function genId(){ return "lg-" + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+  function makeCell(html, cls){
+    var td = document.createElement("td");
+    if(cls) td.className = cls;
+    td.innerHTML = html;
+    return td;
+  }
+  function formatRelative(ts){
+    if(!ts) return "—";
+    var diff = Date.now() - ts;
+    var mins = Math.floor(diff/60000);
+    if(mins < 1) return "just now";
+    if(mins < 60) return mins + "m ago";
+    var hrs = Math.floor(mins/60);
+    if(hrs < 24) return hrs + "h ago";
+    return Math.floor(hrs/24) + "d ago";
+  }
+
+  var STEP_ORDER = ["list","0","1","2"];
+  function goTo(step){
+    step = String(step);
+    document.querySelectorAll(".screen").forEach(function(s){ s.classList.remove("active"); });
+    document.getElementById("screen-"+step).classList.add("active");
+    var idx = STEP_ORDER.indexOf(step);
+    document.querySelectorAll(".steps li").forEach(function(li){
+      var s = li.getAttribute("data-step");
+      var i = STEP_ORDER.indexOf(s);
+      li.classList.remove("active","done");
+      if(s === step) li.classList.add("active");
+      else if(i < idx) li.classList.add("done");
+    });
+  }
+
+  function monthName(y,m){ return new Date(y, m, 1).toLocaleString(undefined,{month:"short",year:"numeric"}); }
+  function monthsBetweenInclusive(fromStr, toStr){
+    if(!fromStr || !toStr) return { months:0, label:"—" };
+    var f = new Date(fromStr+"T00:00:00");
+    var t = new Date(toStr+"T00:00:00");
+    if(isNaN(f) || isNaN(t) || t < f) return { months:0, label:"Invalid range" };
+    var months = (t.getFullYear()-f.getFullYear())*12 + (t.getMonth()-f.getMonth()) + 1;
+    var label = months + (months===1?" month":" months") + " (" + monthName(f.getFullYear(),f.getMonth()) + " – " + monthName(t.getFullYear(),t.getMonth()) + ")";
+    return { months:months, label:label };
+  }
+
+  // ---------- Storage (Supabase-backed, multi-ledger, real-time) ----------
+  // 1) Create a Supabase project (free tier is fine): https://supabase.com
+  // 2) Run supabase-setup.sql (provided alongside this file) in the SQL Editor
+  // 3) Paste your Project URL and anon public key below (Project Settings → API)
+  var SUPABASE_URL = "https://mdwsfavxcuvhlqvpxenq.supabase.co";
+  var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1kd3NmYXZ4Y3V2aGxxdnB4ZW5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyMDUwNDMsImV4cCI6MjEwMDc4MTA0M30.A6rsjeso_STfQgw_e-ZYpX9NSLauI6JQuplcw_8BZrY";
+
+  var sb = null;
+  try {
+    if(SUPABASE_URL.indexOf("YOUR_SUPABASE_URL") === -1 && typeof supabase !== "undefined"){
+      sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+  } catch(e){ sb = null; }
+  var hasStorage = !!sb;
+
+  function setBadge(text, cls){
+    var el = document.getElementById("sync-badge");
+    if(!el) return;
+    el.textContent = text;
+    el.className = "sync-badge" + (cls ? " "+cls : "");
+  }
+
+  function rowToIndexEntry(row){
+    var d = row.data || {};
+    return { id: row.id, name: row.name, memberCount: (d.members||[]).length, updatedAt: new Date(row.updated_at).getTime() };
+  }
+
+  function loadIndex(){
+    if(!hasStorage) return Promise.resolve(ledgerIndex);
+    return sb.from("ledgers").select("id,name,data,updated_at").order("updated_at",{ascending:false})
+      .then(function(res){
+        if(res.error){ console.error("Supabase load error:", res.error); lastLoadError = res.error; return ledgerIndex; }
+        lastLoadError = null;
+        ledgerIndex = (res.data || []).map(rowToIndexEntry);
+        return ledgerIndex;
+      }).catch(function(e){ lastLoadError = e; console.error("Supabase load exception:", e); return ledgerIndex; });
+  }
+
+  function upsertIndexEntryLocal(){
+    if(!state.ledgerId) return;
+    var entry = ledgerIndex.filter(function(e){ return e.id === state.ledgerId; })[0];
+    var payload = { id: state.ledgerId, name: state.ledgerName || "Untitled ledger", memberCount: state.members.length, updatedAt: Date.now() };
+    if(entry){ entry.name = payload.name; entry.memberCount = payload.memberCount; entry.updatedAt = payload.updatedAt; }
+    else { ledgerIndex.push(payload); }
+  }
+
+  function cacheLedger(){
+    if(!state.ledgerId) return;
+    localLedgerCache[state.ledgerId] = { name: state.ledgerName, members: JSON.parse(JSON.stringify(state.members)), nextId: nextId };
+  }
+
+  function saveLedgerData(){
+    if(!state.ledgerId) return;
+    cacheLedger();
+    upsertIndexEntryLocal();
+    if(!hasStorage) return;
+    var dataObj = { name: state.ledgerName, members: state.members, nextId: nextId };
+    var updatedAtStr = new Date().toISOString();
+    lastSyncedJSON = JSON.stringify(dataObj);
+    lastSavedUpdatedAt = updatedAtStr;
+    sb.from("ledgers").upsert({
+      id: state.ledgerId,
+      name: state.ledgerName || "Untitled ledger",
+      data: dataObj,
+      updated_at: updatedAtStr
+    }, { onConflict: "id" }).then(function(res){
+      setBadge(res.error ? "Sync failed — check console" : "Live · synced", res.error ? "off" : "live");
+      if(res.error) console.error("Supabase save error:", res.error);
+    }).catch(function(err){
+      console.error("Supabase save exception:", err);
+      setBadge("Sync failed — check console", "off");
+    });
+  }
+
+  // Saves are debounced so typing doesn't fire a network request (and a
+  // realtime echo back to ourselves) on every single keystroke.
+  function scheduleSave(){
+    clearTimeout(saveDebounceTimer);
+    saveDebounceTimer = setTimeout(saveLedgerData, 500);
+  }
+
+  function deleteLedgerRemote(id){
+    if(!hasStorage) return Promise.resolve();
+    return sb.from("ledgers").delete().eq("id", id).then(function(res){
+      if(res.error) console.error("Supabase delete error:", res.error);
+    }).catch(function(err){ console.error("Supabase delete exception:", err); });
+  }
+
+  // Real-time: any browser tab with this page open (anywhere, not just Claude)
+  // gets pushed updates the moment a row changes.
+  function handleRealtimeChange(payload){
+    var activeEl = document.querySelector(".screen.active");
+    if(!activeEl) return;
+    if(activeEl.id === "screen-list"){
+      loadIndex().then(function(){ renderLedgerList(); });
+      return;
+    }
+    if(activeEl.id === "screen-2" && state.ledgerId && payload.new && payload.new.id === state.ledgerId){
+      // Postgres jsonb does not preserve key order, so comparing JSON strings
+      // is unreliable — compare the timestamp we set on our own last save instead.
+      if(payload.new.updated_at && payload.new.updated_at === lastSavedUpdatedAt){
+        lastSyncedJSON = JSON.stringify(payload.new.data);
+        return;
+      }
+      var d = payload.new.data || {};
+      state.members = d.members || [];
+      nextId = Math.max(nextId, d.nextId || 1);
+      state.ledgerName = d.name || state.ledgerName;
+      lastSyncedJSON = JSON.stringify(d);
+      localLedgerCache[state.ledgerId] = d;
+      document.getElementById("ledger-name-input").value = state.ledgerName;
+      renderTable(true);
+      setBadge("Live · synced", "live");
+    }
+  }
+
+  function startRealtime(){
+    if(!hasStorage) return;
+    sb.channel("ledgers-changes")
+      .on("postgres_changes", { event:"*", schema:"public", table:"ledgers" }, handleRealtimeChange)
+      .subscribe();
+    // light safety-net refresh in case a realtime event is ever missed
+    setInterval(function(){
+      var activeEl = document.querySelector(".screen.active");
+      if(activeEl && activeEl.id === "screen-list") loadIndex().then(renderLedgerList);
+    }, 15000);
+  }
+
+  function init(){
+    if(!hasStorage){
+      setBadge("Local only — add Supabase keys", "off");
+      renderLedgerList();
+      goTo("list");
+      return;
+    }
+    setBadge("Connecting…", "off");
+    loadIndex().then(function(){
+      renderLedgerList();
+      goTo("list");
+      if(lastLoadError){
+        setBadge("Sync failed — check console", "off");
+      } else {
+        setBadge("Live · synced", "live");
+      }
+      startRealtime();
+    });
+  }
+
+  // ---------- Ledger list screen ----------
+  function renderLedgerList(){
+    var select = document.getElementById("ledger-select");
+    var actions = document.getElementById("ledger-picker-actions");
+    var sorted = ledgerIndex.slice().sort(function(a,b){ return (b.updatedAt||0) - (a.updatedAt||0); });
+    if(!sorted.length){
+      select.innerHTML = '<option value="" selected>No ledgers yet — create one below</option>';
+      select.disabled = true;
+    } else {
+      select.disabled = false;
+      select.innerHTML = '<option value="" selected disabled>Choose a ledger…</option>' +
+        sorted.map(function(e){
+          var count = e.memberCount || 0;
+          return '<option value="'+e.id+'">'+esc(e.name || "Untitled ledger")+' — '+count+' member'+(count===1?"":"s")+'</option>';
+        }).join("");
+    }
+    select.value = "";
+    actions.classList.remove("show");
+  }
+
+  document.getElementById("ledger-select").addEventListener("change", function(){
+    var id = this.value;
+    var actions = document.getElementById("ledger-picker-actions");
+    if(!id){ actions.classList.remove("show"); return; }
+    var entry = ledgerIndex.filter(function(e){ return e.id === id; })[0];
+    var count = entry ? (entry.memberCount || 0) : 0;
+    document.getElementById("ledger-picker-meta").innerHTML =
+      '<span class="lp-name">'+esc(entry ? entry.name : "Untitled ledger")+'</span>'+
+      count+' member'+(count===1?"":"s")+' · updated '+formatRelative(entry ? entry.updatedAt : null);
+    actions.classList.add("show");
+  });
+
+  document.getElementById("open-selected-ledger").addEventListener("click", function(){
+    var id = document.getElementById("ledger-select").value;
+    if(id) openLedger(id);
+  });
+
+  document.getElementById("delete-selected-ledger").addEventListener("click", function(){
+    var btn = this;
+    var id = document.getElementById("ledger-select").value;
+    if(!id) return;
+    if(btn.getAttribute("data-confirm") === "1"){
+      deleteLedger(id);
+    } else {
+      btn.setAttribute("data-confirm","1");
+      btn.textContent = "Confirm?";
+      setTimeout(function(){ btn.setAttribute("data-confirm",""); btn.textContent = "Delete"; }, 3000);
+    }
+  });
+
+  function deleteLedger(id){
+    ledgerIndex = ledgerIndex.filter(function(e){ return e.id !== id; });
+    delete localLedgerCache[id];
+    deleteLedgerRemote(id);
+    renderLedgerList();
+  }
+
+  function openLedger(id){
+    state.ledgerId = id;
+    var entry = ledgerIndex.filter(function(e){ return e.id === id; })[0];
+    var cached = localLedgerCache[id];
+    state.ledgerName = (cached && cached.name) || (entry && entry.name) || "";
+    state.members = cached ? cached.members : [];
+    if(cached && cached.nextId) nextId = Math.max(nextId, cached.nextId);
+    lastSyncedJSON = cached ? JSON.stringify({ name: cached.name, members: cached.members, nextId: cached.nextId }) : "";
+    renderTable(true);
+    document.getElementById("ledger-name-input").value = state.ledgerName;
+    goTo("2");
+    if(hasStorage){
+      setBadge("Loading…", "off");
+      sb.from("ledgers").select("name,data").eq("id", id).maybeSingle().then(function(res){
+        if(state.ledgerId !== id) return;
+        if(res.data && res.data.data){
+          var data = res.data.data;
+          state.members = data.members || [];
+          nextId = Math.max(nextId, data.nextId || 1);
+          state.ledgerName = res.data.name || data.name || state.ledgerName;
+          lastSyncedJSON = JSON.stringify(data);
+          localLedgerCache[id] = data;
+          document.getElementById("ledger-name-input").value = state.ledgerName;
+          renderTable(true);
+        } else if(res.error){
+          console.error("Supabase open-ledger error:", res.error);
+        }
+        setBadge("Live · synced", "live");
+      }).catch(function(err){
+        console.error("Supabase open-ledger exception:", err);
+        setBadge("Sync failed — check console", "off");
+      });
+    }
+  }
+
+  document.getElementById("new-ledger-btn").addEventListener("click", function(){
+    state.ledgerId = genId();
+    state.ledgerName = "";
+    state.members = [];
+    lastSyncedJSON = "";
+    document.getElementById("ledger-name").value = "";
+    document.getElementById("team-size").value = 3;
+    goTo("0");
+  });
+
+  document.getElementById("brand-home").addEventListener("click", function(){
+    loadIndex().then(function(){ renderLedgerList(); goTo("list"); });
+  });
+  document.getElementById("all-ledgers-btn").addEventListener("click", function(){
+    loadIndex().then(function(){ renderLedgerList(); goTo("list"); });
+  });
+
+  document.getElementById("form-size").addEventListener("submit", function(e){
+    e.preventDefault();
+    state.ledgerName = document.getElementById("ledger-name").value.trim() || "Untitled ledger";
+    var n = Math.max(1, Math.min(60, parseInt(document.getElementById("team-size").value,10) || 1));
+    buildMemberForms(n);
+    goTo("1");
+  });
+
+  // ---------- Screen 1: member detail forms ----------
+  function buildMemberForms(n){
+    var body = document.getElementById("member-table-body");
+    body.innerHTML = "";
+    for(var i=0;i<n;i++){ addMemberFormRow(); }
+  }
+
+  function populateMemberFormsFromState(){
+    var body = document.getElementById("member-table-body");
+    body.innerHTML = "";
+    if(!state.members.length){ addMemberFormRow(); return; }
+    state.members.forEach(function(m){
+      addMemberFormRow();
+      var rows = body.querySelectorAll("tr");
+      var tr = rows[rows.length-1];
+      tr.dataset.originalId = String(m.id);
+      tr.querySelector('[name="name"]').value = m.name || "";
+      var roleSel = tr.querySelector('[name="role"]');
+      var roleOther = tr.querySelector('[name="roleOther"]');
+      if(m.role && ROLES.indexOf(m.role) !== -1){
+        roleSel.value = m.role;
+      } else if(m.role){
+        roleSel.value = "Other";
+        roleOther.style.display = "block";
+        roleOther.required = true;
+        roleOther.value = m.role;
+      }
+      tr.querySelector('[name="billRate"]').value = m.billRate || 0;
+      tr.querySelector('[name="payRate"]').value = m.payRate || 0;
+      tr.querySelector('[name="fromDate"]').value = m.fromDate || "";
+      tr.querySelector('[name="toDate"]').value = m.toDate || "";
+      tr.querySelector('[name="workType"]').value = m.workType || "Onsite";
+      tr.querySelector('[name="toDate"]').dispatchEvent(new Event("change"));
+    });
+  }
+
+  function addMemberFormRow(){
+    var body = document.getElementById("member-table-body");
+    var tr = document.createElement("tr");
+    var roleOptions = ROLES.map(function(r){ return '<option value="'+r+'">'+r+'</option>'; }).join("");
+    tr.innerHTML =
+      '<td><div class="member-idx">#'+(body.children.length+1)+'</div></td>'+
+      '<td><input type="text" name="name" placeholder="e.g. Priya Nair" required></td>'+
+      '<td>'+
+        '<select name="role" required><option value="" disabled selected>Select role…</option>'+roleOptions+'</select>'+
+        '<input type="text" name="roleOther" placeholder="Enter role" style="display:none;">'+
+      '</td>'+
+      '<td><input type="number" name="billRate" min="0" step="0.5" placeholder="85" required></td>'+
+      '<td><input type="number" name="payRate" min="0" step="0.5" placeholder="45" required></td>'+
+      '<td><input type="date" name="fromDate" required></td>'+
+      '<td><input type="date" name="toDate" required></td>'+
+      '<td class="duration-cell"><div class="duration-months">—</div><div class="duration-range"></div></td>'+
+      '<td><select name="workType"><option value="Onsite">Onsite</option><option value="Offshore">Offshore</option></select></td>'+
+      '<td class="rm"><button type="button" title="Remove">✕</button></td>';
+
+    tr.querySelector(".rm button").addEventListener("click", function(){
+      tr.remove();
+      renumberMemberRows();
+    });
+
+    var roleSelect = tr.querySelector('[name="role"]');
+    var roleOther = tr.querySelector('[name="roleOther"]');
+    roleSelect.addEventListener("change", function(){
+      var isOther = roleSelect.value === "Other";
+      roleOther.style.display = isOther ? "block" : "none";
+      roleOther.required = isOther;
+    });
+
+    var fromEl = tr.querySelector('[name="fromDate"]');
+    var toEl = tr.querySelector('[name="toDate"]');
+    var updateDuration = function(){
+      var r = monthsBetweenInclusive(fromEl.value, toEl.value);
+      tr.querySelector(".duration-months").textContent = r.months ? (r.months + (r.months===1?" month":" months")) : "—";
+      tr.querySelector(".duration-range").textContent = r.months ? r.label.split("(")[1].replace(")","") : "";
+    };
+    fromEl.addEventListener("change", updateDuration);
+    toEl.addEventListener("change", updateDuration);
+
+    body.appendChild(tr);
+  }
+
+  function renumberMemberRows(){
+    document.querySelectorAll("#member-table-body tr").forEach(function(tr, i){
+      tr.querySelector(".member-idx").textContent = "#"+(i+1);
+    });
+  }
+
+  document.getElementById("add-member-row").addEventListener("click", addMemberFormRow);
+  document.getElementById("back-to-0").addEventListener("click", function(){ goTo("0"); });
+  document.getElementById("back-to-1").addEventListener("click", function(){
+    populateMemberFormsFromState();
+    goTo("1");
+  });
+
+  document.getElementById("form-members").addEventListener("submit", function(e){
+    e.preventDefault();
+    var rows = document.querySelectorAll("#member-table-body tr");
+    if(!rows.length) return;
+    var existingById = {};
+    state.members.forEach(function(m){ existingById[m.id] = m; });
+    var updated = [];
+    rows.forEach(function(row){
+      var get = function(name){ return row.querySelector('[name="'+name+'"]').value; };
+      var role = get("role") === "Other" ? (get("roleOther") || "Other") : get("role");
+      var origId = row.dataset.originalId;
+      var existing = origId ? existingById[origId] : null;
+      updated.push({
+        id: existing ? existing.id : nextId++,
+        name: get("name"), role: role,
+        billRate: num(get("billRate")), payRate: num(get("payRate")),
+        fromDate: get("fromDate"), toDate: get("toDate"),
+        workType: get("workType"),
+        monthlyRevHours: existing ? existing.monthlyRevHours : {},
+        monthlyCostHours: existing ? existing.monthlyCostHours : {}
+      });
+    });
+    state.members = updated;
+    if(!state.ledgerId) state.ledgerId = genId();
+    document.getElementById("ledger-name-input").value = state.ledgerName;
+    renderTable();
+    goTo("2");
+  });
+
+  // ---------- Ledger table logic ----------
+  function getGlobalMonths(){
+    var minD=null, maxD=null;
+    state.members.forEach(function(m){
+      if(m.fromDate){ var f=new Date(m.fromDate+"T00:00:00"); if(!isNaN(f) && (!minD||f<minD)) minD=f; }
+      if(m.toDate){ var t=new Date(m.toDate+"T00:00:00"); if(!isNaN(t) && (!maxD||t>maxD)) maxD=t; }
+    });
+    if(!minD || !maxD || maxD < minD) return [];
+    var months = [];
+    var y = minD.getFullYear(), mo = minD.getMonth();
+    while(y < maxD.getFullYear() || (y === maxD.getFullYear() && mo <= maxD.getMonth())){
+      months.push({ key: y + "-" + String(mo+1).padStart(2,"0"), label: monthName(y,mo), y:y, m:mo });
+      mo++; if(mo>11){ mo=0; y++; }
+    }
+    return months;
+  }
+
+  function isActiveInMonth(m, mo){
+    if(!m.fromDate || !m.toDate) return false;
+    var f = new Date(m.fromDate+"T00:00:00"), t = new Date(m.toDate+"T00:00:00");
+    if(isNaN(f) || isNaN(t)) return false;
+    var monthStart = new Date(mo.y, mo.m, 1);
+    var fStart = new Date(f.getFullYear(), f.getMonth(), 1);
+    var tStart = new Date(t.getFullYear(), t.getMonth(), 1);
+    return monthStart >= fStart && monthStart <= tStart;
+  }
+
+  function monthValue(m, mapKey, key){
+    return (m[mapKey] && m[mapKey][key] != null) ? m[mapKey][key] : 160;
+  }
+
+  function computeRow(m, months){
+    var durInfo = monthsBetweenInclusive(m.fromDate, m.toDate);
+    var totalRevHours = 0, totalCostHours = 0;
+    months.forEach(function(mo){
+      if(isActiveInMonth(m, mo)){
+        totalRevHours += monthValue(m, "monthlyRevHours", mo.key);
+        totalCostHours += monthValue(m, "monthlyCostHours", mo.key);
+      }
+    });
+    var totalCost = totalCostHours * m.payRate;
+    var totalRevenue = totalRevHours * m.billRate;
+    var margin = totalRevenue - totalCost;
+    return { duration:durInfo.months, totalRevHours:totalRevHours, totalCostHours:totalCostHours,
+             totalCost:totalCost, totalRevenue:totalRevenue, margin:margin };
+  }
+
+  function renderHeader(months){
+    var thead = document.getElementById("ledger-thead");
+    var span = Math.max(months.length, 1);
+    var row1 =
+      '<tr>'+
+        '<th rowspan="2" class="fz1"></th>'+
+        '<th rowspan="2" class="fz2">Name</th>'+
+        '<th rowspan="2" class="fz3">Role</th>'+
+        '<th rowspan="2" class="fz4">Type</th>'+
+        '<th rowspan="2" class="fz5">Bill Rate ($/hr)</th>'+
+        '<th rowspan="2" class="fz6">Pay Rate ($/hr)</th>'+
+        '<th rowspan="2" class="fz7">From</th>'+
+        '<th rowspan="2" class="fz8">To</th>'+
+        '<th rowspan="2" class="fz9">Duration</th>'+
+        '<th class="group-rev" colspan="'+span+'">Revenue Hours by Month</th>'+
+        '<th rowspan="2" class="group-rev">Total Revenue Hrs</th>'+
+        '<th class="group-cost" colspan="'+span+'">Cost Hours by Month</th>'+
+        '<th rowspan="2" class="group-cost">Total Cost Hrs</th>'+
+        '<th rowspan="2" class="group-cost">Total Cost ($)</th>'+
+        '<th rowspan="2" class="group-rev">Total Revenue ($)</th>'+
+        '<th rowspan="2" class="group-margin">Margin ($)</th>'+
+        '<th rowspan="2"></th>'+
+      '</tr>';
+    var row2 = '<tr>';
+    if(!months.length){
+      row2 += '<th class="group-rev month-col-label">Set From/To</th>';
+      row2 += '<th class="group-cost month-col-label">Set From/To</th>';
+    } else {
+      months.forEach(function(mo){ row2 += '<th class="group-rev month-col-label">'+mo.label+'</th>'; });
+      months.forEach(function(mo){ row2 += '<th class="group-cost month-col-label">'+mo.label+'</th>'; });
+    }
+    row2 += '</tr>';
+    thead.innerHTML = row1 + row2 + '<tr id="ledger-totals-top" class="totals-row-top"></tr>';
+  }
+
+  function renderTable(fromRemote){
+    var months = getGlobalMonths();
+    renderHeader(months);
+    var body = document.getElementById("ledger-body");
+    body.innerHTML = "";
+    state.members.forEach(function(m){
+      body.appendChild(buildRow(m, months));
+    });
+    refreshRoleFilterOptions();
+    applyFilters(!fromRemote);
+  }
+
+  function appendMonthCells(tr, m, months, mapKey){
+    if(!months.length){
+      tr.appendChild(makeCell('<div class="inactive-label">—</div>', "inactive-month"));
+      return;
+    }
+    months.forEach(function(mo){
+      var active = isActiveInMonth(m, mo);
+      if(active){
+        var td = document.createElement("td");
+        td.className = "computed month-cell";
+        var val = monthValue(m, mapKey, mo.key);
+        td.innerHTML = '<input type="number" min="0" step="1" value="'+val+'">';
+        var input = td.querySelector("input");
+        input.addEventListener("input", function(){
+          if(!m[mapKey]) m[mapKey] = {};
+          m[mapKey][mo.key] = num(input.value);
+          refreshComputed(tr, m, months);
+          applyFilters();
+        });
+        tr.appendChild(td);
+      } else {
+        tr.appendChild(makeCell('<div class="inactive-label">—</div>', "inactive-month"));
+      }
+    });
+  }
+
+  function roleCellHtml(m){
+    var known = m.role && ROLES.indexOf(m.role) !== -1;
+    var selVal = known ? m.role : (m.role ? "Other" : "");
+    var otherVal = known ? "" : (m.role || "");
+    var opts = '<option value="" disabled'+(selVal?"":" selected")+'>Select role…</option>' +
+      ROLES.map(function(r){ return '<option value="'+r+'"'+(r===selVal?" selected":"")+'>'+r+'</option>'; }).join("");
+    return '<select data-f="role">'+opts+'</select>'+
+      '<input type="text" data-f="roleOther" placeholder="Enter role" style="display:'+(selVal==="Other"?"block":"none")+';" value="'+esc(otherVal)+'">';
+  }
+
+  function buildRow(m, months){
+    var tr = document.createElement("tr");
+    tr.dataset.id = m.id;
+
+    tr.appendChild(makeCell('<div style="padding:7px 8px;font-family:\'IBM Plex Mono\',monospace;color:var(--ink-soft);font-size:11.5px;">#'+m.id+'</div>', "fz1"));
+    tr.appendChild(makeCell('<input type="text" data-f="name" value="'+esc(m.name)+'">', "fz2"));
+    tr.appendChild(makeCell(roleCellHtml(m), "fz3"));
+    tr.appendChild(makeCell(
+      '<select data-f="workType">'+
+        '<option value="Onsite"'+(m.workType==="Onsite"?" selected":"")+'>Onsite</option>'+
+        '<option value="Offshore"'+(m.workType==="Offshore"?" selected":"")+'>Offshore</option>'+
+      '</select>', "fz4"
+    ));
+    tr.appendChild(makeCell('<input type="number" step="0.5" data-f="billRate" value="'+m.billRate+'">', "fz5"));
+    tr.appendChild(makeCell('<input type="number" step="0.5" data-f="payRate" value="'+m.payRate+'">', "fz6"));
+    tr.appendChild(makeCell('<input type="date" data-f="fromDate" value="'+(m.fromDate||"")+'">', "fz7"));
+    tr.appendChild(makeCell('<input type="date" data-f="toDate" value="'+(m.toDate||"")+'">', "fz8"));
+    tr.appendChild(makeCell('<div class="duration-months"></div>', "duration-display fz9"));
+
+    appendMonthCells(tr, m, months, "monthlyRevHours");
+    tr.appendChild(makeCell('<input type="number" step="0.1" data-f="totalRevHours" value="0">', "computed"));
+    appendMonthCells(tr, m, months, "monthlyCostHours");
+    tr.appendChild(makeCell('<input type="number" step="0.1" data-f="totalCostHours" value="0">', "computed"));
+    tr.appendChild(makeCell('<input type="number" step="0.01" data-f="totalCost" value="0">', "computed"));
+    tr.appendChild(makeCell('<input type="number" step="0.01" data-f="totalRevenue" value="0">', "computed"));
+    tr.appendChild(makeCell('<input type="number" step="0.01" data-f="margin" value="0">', "computed"));
+
+    var rmTd = document.createElement("td");
+    rmTd.className = "rm";
+    rmTd.innerHTML = '<button type="button" title="Remove">✕</button>';
+    rmTd.querySelector("button").addEventListener("click", function(){
+      state.members = state.members.filter(function(x){ return x.id !== m.id; });
+      renderTable();
+    });
+    tr.appendChild(rmTd);
+
+    ["name","workType","billRate","payRate"].forEach(function(f){
+      var el = tr.querySelector('[data-f="'+f+'"]');
+      el.addEventListener("input", function(){
+        var val = el.tagName === "SELECT" ? el.value : (el.type === "number" ? num(el.value) : el.value);
+        m[f] = val;
+        refreshComputed(tr, m, months);
+        applyFilters();
+      });
+    });
+
+    var roleSelect = tr.querySelector('[data-f="role"]');
+    var roleOtherInput = tr.querySelector('[data-f="roleOther"]');
+    function commitRole(){
+      var isOther = roleSelect.value === "Other";
+      roleOtherInput.style.display = isOther ? "block" : "none";
+      m.role = isOther ? (roleOtherInput.value || "Other") : roleSelect.value;
+      refreshComputed(tr, m, months);
+      refreshRoleFilterOptions();
+      applyFilters();
+    }
+    roleSelect.addEventListener("change", commitRole);
+    roleOtherInput.addEventListener("input", commitRole);
+
+    ["fromDate","toDate"].forEach(function(f){
+      var el = tr.querySelector('[data-f="'+f+'"]');
+      el.addEventListener("change", function(){
+        m[f] = el.value;
+        renderTable();
+      });
+    });
+
+    refreshComputed(tr, m, months);
+    return tr;
+  }
+
+  function refreshComputed(tr, m, months){
+    var c = computeRow(m, months);
+    tr.querySelector(".duration-months").textContent = c.duration ? (c.duration + (c.duration===1?" mo":" mo")) : "—";
+    setVal(tr, "totalRevHours", c.totalRevHours.toFixed(1));
+    setVal(tr, "totalCostHours", c.totalCostHours.toFixed(1));
+    setVal(tr, "totalCost", c.totalCost.toFixed(2));
+    setVal(tr, "totalRevenue", c.totalRevenue.toFixed(2));
+    setVal(tr, "margin", c.margin.toFixed(2));
+  }
+  function setVal(tr, f, v){ tr.querySelector('[data-f="'+f+'"]').value = v; }
+
+  function totalsCellsHTML(totals, months, filtered){
+    var span = Math.max(months.length, 1);
+    var marginPct = totals.totalRevenue > 0 ? (totals.margin / totals.totalRevenue * 100) : 0;
+    var marginDisplay = money(totals.margin) + ' (' + marginPct.toFixed(1) + '%)';
+    var label = filtered ? "Filtered totals →" : "Team totals →";
+    return '<td class="fz1"></td><td class="tf-label fz-label-span" colspan="8">'+label+'</td>'+
+      '<td colspan="'+span+'"></td>'+
+      '<td>'+totals.totalRevHours.toFixed(1)+'</td>'+
+      '<td colspan="'+span+'"></td>'+
+      '<td>'+totals.totalCostHours.toFixed(1)+'</td>'+
+      '<td>'+money(totals.totalCost)+'</td>'+
+      '<td>'+money(totals.totalRevenue)+'</td>'+
+      '<td class="tf-margin">'+marginDisplay+'</td>'+
+      '<td></td>';
+  }
+
+  // ---------- Filters ----------
+  function filterVal(id){ var el = document.getElementById(id); return el ? el.value : ""; }
+  function filterNum(id){ var v = filterVal(id); return v === "" ? null : parseFloat(v); }
+
+  function getActiveFilters(){
+    return {
+      name: filterVal("filter-name").trim().toLowerCase(),
+      role: filterVal("filter-role"),
+      type: filterVal("filter-type"),
+      from: filterVal("filter-from"),
+      to: filterVal("filter-to"),
+      billMin: filterNum("filter-bill-min"), billMax: filterNum("filter-bill-max"),
+      payMin: filterNum("filter-pay-min"), payMax: filterNum("filter-pay-max"),
+      durMin: filterNum("filter-dur-min"), durMax: filterNum("filter-dur-max"),
+      revHrsMin: filterNum("filter-revhrs-min"), revHrsMax: filterNum("filter-revhrs-max"),
+      costHrsMin: filterNum("filter-costhrs-min"), costHrsMax: filterNum("filter-costhrs-max"),
+      costMin: filterNum("filter-cost-min"), costMax: filterNum("filter-cost-max"),
+      revenueMin: filterNum("filter-revenue-min"), revenueMax: filterNum("filter-revenue-max"),
+      marginMin: filterNum("filter-margin-min"), marginMax: filterNum("filter-margin-max")
+    };
+  }
+
+  function inRange(val, min, max){
+    if(min !== null && val < min) return false;
+    if(max !== null && val > max) return false;
+    return true;
+  }
+
+  function countActiveFilters(f){
+    var c = 0;
+    if(f.name) c++;
+    if(f.role) c++;
+    if(f.type) c++;
+    if(f.from) c++;
+    if(f.to) c++;
+    if(f.billMin!==null || f.billMax!==null) c++;
+    if(f.payMin!==null || f.payMax!==null) c++;
+    if(f.durMin!==null || f.durMax!==null) c++;
+    if(f.revHrsMin!==null || f.revHrsMax!==null) c++;
+    if(f.costHrsMin!==null || f.costHrsMax!==null) c++;
+    if(f.costMin!==null || f.costMax!==null) c++;
+    if(f.revenueMin!==null || f.revenueMax!==null) c++;
+    if(f.marginMin!==null || f.marginMax!==null) c++;
+    return c;
+  }
+
+  function memberPassesFilters(m, f, months){
+    if(f.name && m.name.toLowerCase().indexOf(f.name) === -1) return false;
+    if(f.role && m.role !== f.role) return false;
+    if(f.type && m.workType !== f.type) return false;
+    if(f.from && (!m.fromDate || m.fromDate < f.from)) return false;
+    if(f.to && (!m.toDate || m.toDate > f.to)) return false;
+    if(!inRange(m.billRate, f.billMin, f.billMax)) return false;
+    if(!inRange(m.payRate, f.payMin, f.payMax)) return false;
+    var c = computeRow(m, months);
+    if(!inRange(c.duration, f.durMin, f.durMax)) return false;
+    if(!inRange(c.totalRevHours, f.revHrsMin, f.revHrsMax)) return false;
+    if(!inRange(c.totalCostHours, f.costHrsMin, f.costHrsMax)) return false;
+    if(!inRange(c.totalCost, f.costMin, f.costMax)) return false;
+    if(!inRange(c.totalRevenue, f.revenueMin, f.revenueMax)) return false;
+    if(!inRange(c.margin, f.marginMin, f.marginMax)) return false;
+    return true;
+  }
+
+  function refreshRoleFilterOptions(){
+    var sel = document.getElementById("filter-role");
+    if(!sel) return;
+    var current = sel.value;
+    var seen = {};
+    var opts = '<option value="">All roles</option>';
+    ROLES.filter(function(r){ return r !== "Other"; }).forEach(function(r){
+      seen[r] = true;
+      opts += '<option value="'+esc(r)+'">'+r+'</option>';
+    });
+    state.members.forEach(function(m){
+      if(m.role && !seen[m.role]){
+        seen[m.role] = true;
+        opts += '<option value="'+esc(m.role)+'">'+esc(m.role)+'</option>';
+      }
+    });
+    sel.innerHTML = opts;
+    if(Array.prototype.some.call(sel.options, function(o){ return o.value === current; })) sel.value = current;
+  }
+
+  function updateFilterUI(visible, total, f){
+    var countEl = document.getElementById("filter-count");
+    if(countEl){
+      countEl.innerHTML = (countActiveFilters(f) > 0)
+        ? "Showing <strong>"+visible+"</strong> of "+total+" members"
+        : "Showing all members";
+    }
+    var badge = document.getElementById("filter-badge");
+    if(badge){
+      var n = countActiveFilters(f);
+      badge.textContent = n;
+      badge.style.display = n > 0 ? "inline-flex" : "none";
+    }
+  }
+
+  function applyFilters(shouldSave){
+    var months = getGlobalMonths();
+    var f = getActiveFilters();
+    var body = document.getElementById("ledger-body");
+    var rows = body ? body.querySelectorAll("tr[data-id]") : [];
+    var visible = 0;
+    rows.forEach(function(tr){
+      var id = tr.dataset.id;
+      var m = state.members.filter(function(x){ return String(x.id) === String(id); })[0];
+      var pass = m ? memberPassesFilters(m, f, months) : true;
+      tr.style.display = pass ? "" : "none";
+      if(pass) visible++;
+    });
+    updateFilterUI(visible, state.members.length, f);
+    recalcTotals(months, shouldSave);
+  }
+
+  function recalcTotals(months, shouldSave){
+    months = months || getGlobalMonths();
+    var f = getActiveFilters();
+    var filtered = countActiveFilters(f) > 0;
+    var totals = { totalRevHours:0, totalCostHours:0, totalCost:0, totalRevenue:0, margin:0 };
+    state.members.forEach(function(m){
+      if(!memberPassesFilters(m, f, months)) return;
+      var c = computeRow(m, months);
+      totals.totalRevHours += c.totalRevHours;
+      totals.totalCostHours += c.totalCostHours;
+      totals.totalCost += c.totalCost;
+      totals.totalRevenue += c.totalRevenue;
+      totals.margin += c.margin;
+    });
+    var cellsHtml = totalsCellsHTML(totals, months, filtered);
+    var topRow = document.getElementById("ledger-totals-top");
+    if(topRow) topRow.innerHTML = cellsHtml;
+    if(shouldSave !== false) scheduleSave();
+  }
+
+  document.getElementById("toggle-filters").addEventListener("click", function(){
+    document.getElementById("filters-panel").classList.toggle("show");
+  });
+
+  document.getElementById("clear-filters").addEventListener("click", function(){
+    document.querySelectorAll("#filters-panel input, #filters-panel select").forEach(function(el){
+      el.value = "";
+    });
+    applyFilters();
+  });
+
+  document.querySelectorAll("#filters-panel input, #filters-panel select").forEach(function(el){
+    el.addEventListener("input", function(){ applyFilters(); });
+    el.addEventListener("change", function(){ applyFilters(); });
+  });
+
+  document.getElementById("add-row").addEventListener("click", function(){
+    var m = { id: nextId++, name:"New member", role:"", billRate:0, payRate:0,
+              fromDate:"", toDate:"", workType:"Onsite", monthlyRevHours:{}, monthlyCostHours:{} };
+    state.members.push(m);
+    renderTable();
+  });
+
+  document.getElementById("ledger-name-input").addEventListener("input", function(e){
+    state.ledgerName = e.target.value;
+  });
+  document.getElementById("ledger-name-input").addEventListener("change", function(){
+    upsertIndexEntryLocal();
+    saveLedgerData();
+  });
+
+  // ---------- Export ----------
+  function tableToAOA(){
+    var months = getGlobalMonths();
+    var header = ["ID","Name","Role","Type","Bill Rate","Pay Rate","From","To","Duration (mo)"]
+      .concat(months.map(function(mo){ return mo.label + " Rev Hrs"; }))
+      .concat(["Total Revenue Hrs"])
+      .concat(months.map(function(mo){ return mo.label + " Cost Hrs"; }))
+      .concat(["Total Cost Hrs","Total Cost","Total Revenue","Margin"]);
+    var rows = [header];
+    state.members.forEach(function(m){
+      var c = computeRow(m, months);
+      var row = [m.id, m.name, m.role, m.workType, m.billRate, m.payRate, m.fromDate, m.toDate, c.duration];
+      months.forEach(function(mo){ row.push(isActiveInMonth(m, mo) ? monthValue(m,"monthlyRevHours",mo.key) : ""); });
+      row.push(c.totalRevHours);
+      months.forEach(function(mo){ row.push(isActiveInMonth(m, mo) ? monthValue(m,"monthlyCostHours",mo.key) : ""); });
+      row.push(c.totalCostHours, c.totalCost, c.totalRevenue, c.margin);
+      rows.push(row);
+    });
+    return rows;
+  }
+
+  document.getElementById("export-xlsx").addEventListener("click", function(){
+    var aoa = tableToAOA();
+    var ws = XLSX.utils.aoa_to_sheet(aoa);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Team Ledger");
+    XLSX.writeFile(wb, (state.ledgerName || "team-ledger").replace(/[^a-z0-9\-_ ]/gi,"") + ".xlsx");
+  });
+
+  document.getElementById("export-csv").addEventListener("click", function(){
+    var aoa = tableToAOA();
+    var csv = aoa.map(function(row){
+      return row.map(function(v){
+        var s = String(v);
+        return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+      }).join(",");
+    }).join("\n");
+    var blob = new Blob([csv], {type:"text/csv"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = (state.ledgerName || "team-ledger").replace(/[^a-z0-9\-_ ]/gi,"") + ".csv";
+    a.click();
+  });
+
+  init();
+
+})();
+</script>
+</body>
+</html>
